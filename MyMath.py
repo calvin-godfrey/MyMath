@@ -85,7 +85,10 @@ class Term(object):
                     if "/" in coefficient:
                         self.coe_numerator, self.coe_denominator = [int(i) for i in coefficient.split("/")]
                     else:
-                        self.coe_numerator = int(coefficient)
+                        try:
+                            self.coe_numerator = int(coefficient)
+                        except: #It's just x
+                            self.coe_numerator, self.coe_denominator = 1, 1
                 except ValueError: #No exp (**)
                     value = args[0]
                     if 'x' in value:
@@ -354,12 +357,7 @@ y = Term(coefficient=-5, exponent="2") #Different way to construct it, not all k
 x *= y #Right now it pretends that all theh variables are the same and ignores them in math
 print x'''
 
-z = Function("-8/3*x**3/2+5/3*x**-7/8")
-a = Function("x-2")
+A = Function("x-x**2")
 b = Function("x+3")
-print a
-print b
-print a*b #It can foil!
-print a/b
-print z.derivative()
-print z.indefinite_integral()
+print A
+print A*b #It can foil!
