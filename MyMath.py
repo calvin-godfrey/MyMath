@@ -55,7 +55,7 @@ class Term(object):
                             continue
                         value = str(value)
                         if "/" in value:
-                            self.coe_numerator, self.coe_denominator = [int(i) for i in value.split("/")]
+                            self.coe_numerator, self.coe_denominator = [int(float(i)) for i in value.split("/")]
                         else:
                             self.coe_numerator = int(value)
                     elif name == "variable":
@@ -66,7 +66,7 @@ class Term(object):
                             continue
                         value = str(value)
                         if "/" in value:
-                            self.exp_numerator, self.exp_denominator = [int(i) for i in value.split("/")]
+                            self.exp_numerator, self.exp_denominator = [int(float(i)) for i in value.split("/")]
                         else:
                             self.exp_numerator = int(value)
         elif len(args) > 1:
@@ -115,6 +115,7 @@ class Term(object):
                 raise TypeError("Unnamed parameter to Term constructor must be a string")
         self.coe_numerator, self.coe_denominator = simplify(self.coe_numerator, self.coe_denominator)
         self.exp_numerator, self.exp_denominator = simplify(self.exp_numerator, self.exp_denominator)
+        self.check_sign()
 
     def __repr__(self):
         """Returns a way to display the term that is basically identical to the string input to __init__"""
@@ -152,6 +153,8 @@ class Term(object):
             new_coe_numerator = new_coe_numerator*other.coe_denominator + other.coe_numerator*new_coe_denominator #Don't have to check type because it has for both of these already
             new_coe_denominator *= other.coe_denominator
             new_coe_numerator, new_coe_denominator = simplify(new_coe_numerator, new_coe_denominator)
+            if new_coe_numerator == 0:
+                new_exp_numerator = 0
             return Term(coefficient="{}/{}".format(new_coe_numerator, new_coe_denominator), exponent="{}/{}".format(new_exp_numerator, new_exp_denominator))
         else:
             raise ValueError("Exponents of terms must be the same to add. Create a polynomial instead.")
@@ -189,18 +192,29 @@ class Term(object):
             raise TypeError("Terms can only be multiplied by other terms or numbers")
 
     def __pow__(self, other):
+        if isinstance(other, int):
+            new_exp_numerator, new_exp_denominator, new_coe_numerator, new_coe_denominator = self.exp_numerator, self.exp_denominator, self.coe_numerator, self.coe_denominator
+            new_coe_numerator = new_coe_numerator**other
+            new_coe_denominator = new_coe_denominator **other
+            new_exp_numerator = new_exp_numerator*other
+            return Term(coefficient="{}/{}".format(new_coe_numerator, new_coe_denominator), exponent="{}/{}".format(new_exp_numerator, new_exp_denominator))
+
         raise NotImplementedError #Not yet
 
     def __truediv__(self, other):
         """Return a new term, this term divided by another or a number"""
+        self.check_sign()
         new_exp_numerator, new_exp_denominator, new_coe_numerator, new_coe_denominator = self.exp_numerator, self.exp_denominator, self.coe_numerator, self.coe_denominator
         if isinstance(other, Term):
+            other.check_sign()
+            if self.exp_numerator==other.exp_numerator and self.exp_denominator==other.exp_denominator and self.coe_denominator == other.coe_denominator and self.coe_numerator == other.coe_numerator:
+                return Term("1")
             new_coe_numerator *= other.coe_denominator
             new_coe_denominator *= other.coe_numerator
             new_coe_numerator, new_coe_denominator = simplify(new_coe_numerator, new_coe_denominator)
-            new_exp_numerator = new_exp_numerator*other.exp_denominator - other.exp_numerator*other.exp_numerator
+            new_exp_numerator = new_exp_numerator*other.exp_denominator - other.exp_numerator*new_exp_denominator
             new_exp_denominator *= other.exp_denominator
-            new_exp_numerator, new_exp_denominator = simplify(new_coe_numerator, new_coe_denominator)
+            new_exp_numerator, new_exp_denominator = simplify(new_exp_numerator, new_exp_denominator)
             return Term(coefficient="{}/{}".format(new_coe_numerator, new_coe_denominator), exponent="{}/{}".format(new_exp_numerator, new_exp_denominator))
         if isinstance(other, (int, float)):
             new_coe_denominator *= other
@@ -237,6 +251,14 @@ class Term(object):
         indefinite = self.indefinite_integral()
         return indefinite.evaluate(upper)-indefinite.evaluate(lower)
 
+    def check_sign(self):
+        if self.coe_denominator < 0:
+            self.coe_denominator *= -1
+            self.coe_numerator *= -1
+        if self.exp_denominator < 0:
+            self.exp_denominator *= -1
+            self.exp_numerator *= -1
+
 class Polynomial(object):
     """This is the class for a series of terms added together"""
     def __init__(self, terms):
@@ -250,8 +272,10 @@ class Polynomial(object):
                 if self_term.exp_numerator == temp_term.exp_numerator and self_term.exp_denominator == temp_term.exp_denominator:
                     self_term += temp_term
                     break
-            else:
+            else: #Term with that exponent is not already in the list
                 self.terms.append(temp_term)
+        for term in self.terms:
+            term.check_sign()
         self.terms = sorted(self.terms, key=lambda i:i.exp_numerator/i.exp_denominator)[::-1]
 
     def __repr__(self):
@@ -264,7 +288,7 @@ class Polynomial(object):
             if isinstance(other, int):
                 other = Term(coefficient=other)
             for term in new_arr:
-                if term.exponent == other.exponent:
+                if term.exp_numerator/term.exp_denominator == other.exp_numerator/other.exp_denominator:
                     term += other
                     break
             else: #The polynomial doesn't contain a term with a matching power
@@ -272,21 +296,26 @@ class Polynomial(object):
         elif isinstance(other, Polynomial):
             for other_term in other.terms:
                 for this_term in new_arr: #TODO: make this more efficient somehow
-                    if other_term.exponent == this_term.exponent:
+                    if other_term.exp_numerator/other_term.exp_denominator == this_term.exp_numerator/this_term.exp_denominator:
                         this_term += other_term
                         break
                 new_arr.append(other_term)
         else:
             raise TypeError("Only a polynomial, term, or int can be added to a polynomial")
+        for term in new_arr:
+            term.check_sign()
         return Polynomial(new_arr)
 
     def __sub__(self, other):
         neg_other_arr = []
+        curr_terms = Polynomial(self.terms)
         for term in other.terms:
             term *= -1
             neg_other_arr.append(term)
-        neg_other = Polynomial(''.join(neg_other_arr))
-        return self + neg_other
+        neg_other = Polynomial([repr(i) for i in neg_other_arr])
+        curr_terms = curr_terms+neg_other
+        curr_terms.combine()
+        return Polynomial(curr_terms.terms)
 
     def __mul__(self, other):
         if isinstance(other, Polynomial):
@@ -306,22 +335,44 @@ class Polynomial(object):
             raise TypeError("Polynomial can only be multiplied by int, term, or polynomial")
 
     def __truediv__(self, other): #THIS IS JUST COMPLETELY WRONG
-        raise NotImplementedError
-        if isinstance(other, Polynomial):
-            new_arr = []
-            for other_term in other.terms:
-                for this_term in self.terms:
-                    new_arr.append(this_term/other_term)
-            return Polynomial(new_arr)
-        elif isinstance(other, (Term, int)):
-            new_arr = self.terms
+        if isinstance(other, Polynomial): #Assuming there is no remainder in division
+            copy_self = Polynomial(self.terms)
+            ans = []
+            while len(copy_self.terms)>2:
+                div = copy_self.terms[0]/other.terms[0]
+                mult_other = Polynomial([term*div for term in other.terms])
+                copy_self -= mult_other
+                copy_self.combine()
+                copy_self.arrange()
+                ans.append(div)
+            ans = Polynomial(ans)
+            ans.arrange()
+            ans.combine()
+            ans_str = ''.join([repr(i) if repr(i)[0]=='-' or index==0 else "+"+repr(i) for index, i in enumerate(ans.terms)])
+            factor = re.compile("-?(?:\\d+\\*)?x(?:\\+|-)\\d+")
+            search = factor.findall(ans_str)
+            if len(search)==1:
+                return Polynomial(ans.terms)
+
+        elif isinstance(other, (Term, int)): #Assuming there is no remainder in division
+            new_arr = list(self.terms)
             if isinstance(other, int):
-                other = Term(coefficient=other)
+                other = Term(coefficient="{}/1".format(other))
             for term in new_arr:
                 term /= other
             return Polynomial(new_arr)
         else:
             raise TypeError("Polynomial can only be divided by int, term, or polynomial")
+
+    def __pow__(self, other):
+        if isinstance(other, int):
+            if other > 0:
+                temp = Polynomial(self.terms)
+                ans = Polynomial(self.terms)
+                for i in range(1, other):
+                    ans = ans*temp
+                return ans
+        raise NotImplementedError
 
     def evaluate(self, num):
         return sum([term.evaluate(num) for term in self.terms])
@@ -342,22 +393,56 @@ class Polynomial(object):
                 try:
                     terms2 = self.terms[j]
                 except IndexError:
-                    return None
-                if terms2.exp_numerator==terms1.exp_numerator and terms2.exp_denominator == terms1.exp_denominator:
-                    self.terms[i] += terms2
+                    self.terms = filter(lambda x:repr(x)!='0', self.terms)
+                    return self
+                try:
+                    terms1 = terms1+terms2
+                    self.terms[i] = terms1
                     self.terms.pop(j)
                     j -= 1
+                except ValueError:
+                    continue
+        self.terms = filter(lambda x:repr(x)!='0', self.terms)
+        return self
 
-'''x = Function("4*x**2")
-print x.evaluate(6)
-print x.derivative()
-print x.indefinite_integral()
-print x.definite_integral(0, 10)
-y = Term(coefficient=-5, exponent="2") #Different way to construct it, not all kwargs required, can be string or int or float
-x *= y #Right now it pretends that all theh variables are the same and ignores them in math
-print x'''
+    def factor(self):
+        min_exp_numerator = 1e10
+        min_exp_denominator = 1
+        new_arr = self.terms
+        final = []
+        factors = []
+        for term in self.terms:
+            if term.exp_numerator/term.exp_denominator < min_exp_numerator/min_exp_denominator:
+                min_exp_numerator = term.exp_numerator
+                min_exp_denominator = term.exp_denominator
+        if min_exp_numerator < 1e10:
+            alone = Term("x**{}/{}".format(min_exp_numerator, min_exp_denominator))
+            for term in new_arr:
+                term = term/Term("x**{}/{}".format(min_exp_numerator, min_exp_denominator))
+                final.append(term)
+        else:
+            alone = ""
+        factors.append(alone)
+        ans = Polynomial(final)
+        return "{}*({})".format(alone, repr(Polynomial(final)))
 
-A = Function("x-x**2")
-b = Function("x+3")
-print A
-print A*b #It can foil!
+    def arrange(self):
+        self.terms = sorted(self.terms, key=lambda i:i.exp_numerator/i.exp_denominator)[::-1]
+        return self
+
+
+class Rational(object):
+    """Class for functions that have x's in numerator and denominator"""
+    def __init__(self, numerator, denominator):
+        if isinstance(numerator, (Polynomial, Term)):
+            self.numerator = numerator
+        else:
+            self.numerator = Function(numerator)
+        if isinstance(denominator, (Polynomial, Term)):
+            self.denominator = denominator
+        else:
+            self.denominator = Function(denominator)
+
+b = Function("x**2+9*x-10")
+e = Function("x**3+11*x**2+8*x-20")
+print e/b
