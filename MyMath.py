@@ -338,7 +338,7 @@ class Polynomial(object):
         if isinstance(other, Polynomial): #Assuming there is no remainder in division
             copy_self = Polynomial(self.terms)
             ans = []
-            while len(copy_self.terms)>2:
+            while len(copy_self.terms)>1:
                 div = copy_self.terms[0]/other.terms[0]
                 mult_other = Polynomial([term*div for term in other.terms])
                 copy_self -= mult_other
@@ -349,10 +349,9 @@ class Polynomial(object):
             ans.arrange()
             ans.combine()
             ans_str = ''.join([repr(i) if repr(i)[0]=='-' or index==0 else "+"+repr(i) for index, i in enumerate(ans.terms)])
-            factor = re.compile("-?(?:\\d+\\*)?x(?:\\+|-)\\d+")
+            factor = re.compile("-?(?:(?:(?:\\d+/\\d+|\\d+)\\*)?x(?:\\*\\*-?(?:\\d+/\\d+|\\d+))?|\\d+)")
             search = factor.findall(ans_str)
-            if len(search)==1:
-                return Polynomial(ans.terms)
+            return Polynomial(ans.terms)
 
         elif isinstance(other, (Term, int)): #Assuming there is no remainder in division
             new_arr = list(self.terms)
@@ -408,9 +407,9 @@ class Polynomial(object):
     def factor(self):
         min_exp_numerator = 1e10
         min_exp_denominator = 1
-        new_arr = self.terms
+        new_arr = list(self.terms)
         final = []
-        factors = []
+        ans = ""
         for term in self.terms:
             if term.exp_numerator/term.exp_denominator < min_exp_numerator/min_exp_denominator:
                 min_exp_numerator = term.exp_numerator
@@ -420,15 +419,47 @@ class Polynomial(object):
             for term in new_arr:
                 term = term/Term("x**{}/{}".format(min_exp_numerator, min_exp_denominator))
                 final.append(term)
+            if repr(alone)=='1':
+                alone = ""
         else:
             alone = ""
-        factors.append(alone)
-        ans = Polynomial(final)
-        return "{}*({})".format(alone, repr(Polynomial(final)))
+        if alone=="":
+            pass
+        else:
+            ans += repr(alone)
+        copy_self = Polynomial(final)
+        for i in range(-100, 101): #Reasonable range for factors
+            try:
+                if copy_self.evaluate(i) == 0:
+                    if i<0:
+                        temp = Function("x+"+str(abs(i)))
+                    else:
+                        temp = Function("x-"+str(i))
+                    copy_self = copy_self/temp
+                    if len(ans):
+                        ans += "*({})".format(repr(temp))
+                    else:
+                        ans += "({})".format(repr(temp))
+                    if repr(copy_self)=='1' or len(copy_self.terms) < 1:
+                        break
+            except AttributeError:
+                break
+        return ans
 
     def arrange(self):
         self.terms = sorted(self.terms, key=lambda i:i.exp_numerator/i.exp_denominator)[::-1]
         return self
+
+    def check_sign(self):
+        self.terms = [term.check_sign() for term in self.terms]
+        return self
+
+    def __eq__(self, other):
+        self.check_sign()
+        self.arrange()
+        other.check_sign()
+        other.arrange()
+        return self.exp_numerator==other.exp_numerator and self.exp_denominator==other.exp_denominator and self.coe_numerator==other.exp_numerator and self.coe_denominator==other.coe_denominator
 
 
 class Rational(object):
@@ -445,4 +476,10 @@ class Rational(object):
 
 b = Function("x**2+9*x-10")
 e = Function("x**3+11*x**2+8*x-20")
-print e/b
+d = Function("x**2+2*x")
+c = Function("x+2")
+print e.factor()
+print b.factor()
+print d.factor()
+print d.factor()
+print d/c
