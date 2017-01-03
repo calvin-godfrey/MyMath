@@ -266,14 +266,9 @@ class Polynomial(object):
         if all([isinstance(term, Term) for term in terms]):
             self.terms = terms
             return None
-        for term in terms:
-            temp_term = Term(term)
-            for self_term in self.terms:
-                if self_term.exp_numerator == temp_term.exp_numerator and self_term.exp_denominator == temp_term.exp_denominator:
-                    self_term += temp_term
-                    break
-            else: #Term with that exponent is not already in the list
-                self.terms.append(temp_term)
+        self.terms = [Term(term) for term in terms]
+        self.arrange()
+        self.combine()
         for term in self.terms:
             term.check_sign()
         self.terms = sorted(self.terms, key=lambda i:i.exp_numerator/i.exp_denominator)[::-1]
@@ -325,12 +320,13 @@ class Polynomial(object):
                     new_arr.append(other_term*this_term)
             return Polynomial(new_arr)
         if isinstance(other, (Term, int)):
-            new_arr = self.terms
+            new_arr = Polynomial(self.terms)
+            ans = []
             if isinstance(other, int):
                 other = Term(coefficient=other)
-            for term in new_arr:
-                term *= other
-            return Polynomial(new_arr)
+            for term in new_arr.terms:
+                ans.append(term * other)
+            return Polynomial(ans)
         else:
             raise TypeError("Polynomial can only be multiplied by int, term, or polynomial")
 
@@ -393,7 +389,7 @@ class Polynomial(object):
                     terms2 = self.terms[j]
                 except IndexError:
                     self.terms = filter(lambda x:repr(x)!='0', self.terms)
-                    return self
+                    break
                 try:
                     terms1 = terms1+terms2
                     self.terms[i] = terms1
@@ -407,20 +403,58 @@ class Polynomial(object):
     def factor(self):
         min_exp_numerator = 1e10
         min_exp_denominator = 1
+        min_coe_numerator = 1e10
+        min_coe_denominator = 1
         new_arr = list(self.terms)
         final = []
         ans = ""
         for term in self.terms:
-            if term.exp_numerator/term.exp_denominator < min_exp_numerator/min_exp_denominator:
+            if term.coe_denominator == 0 or term.coe_numerator==0:
+                continue
+            if term.exp_numerator/term.exp_denominator < min_exp_numerator/min_exp_denominator and term.exp_numerator/term.exp_denominator >= 0:
                 min_exp_numerator = term.exp_numerator
                 min_exp_denominator = term.exp_denominator
-        if min_exp_numerator < 1e10:
-            alone = Term("x**{}/{}".format(min_exp_numerator, min_exp_denominator))
+            if abs(term.coe_numerator/term.coe_denominator) < abs(min_coe_numerator/min_coe_denominator):
+                min_coe_denominator = term.coe_denominator
+                min_coe_numerator = term.coe_numerator
+
+        if min_exp_numerator < 1e10 or min_coe_numerator < 1e10:
+            if min_coe_numerator == 1e10:
+                alone = Term("x**{}/{}".format(min_exp_numerator, min_exp_denominator))
+            elif min_exp_numerator == 1e10:
+                if min_coe_numerator==1 and min_coe_denominator==1:
+                    alone = Term("x")
+                else:
+                    alone = Term("{}/{}*x".format(min_coe_numerator, min_coe_denominator))
+            else:
+                if min_exp_numerator==0:
+                    if min_exp_denominator==1:
+                        if min_coe_denominator==1:
+                            if abs(min_coe_numerator)==1:
+                                alone = ""
+                            else:
+                                alone = Term("{}".format(min_coe_numerator))
+                        else:
+                            alone = Term("{}/{}".format(min_coe_numerator, min_coe_denominator))
+                    else:
+                        if min_coe_denominator==1:
+                            if abs(min_coe_numerator)==1:
+                                alone = ""
+                            else:
+                                alone = Term("{}".format(min_coe_numerator))
+                        else:
+                            alone = Term("{}/{}".format(min_coe_numerator, min_coe_denominator))
+                else:
+                    if min_coe_denominator==1:
+                        if min_coe_numerator==1:
+                            alone = Term("x**{}/{}".format(min_exp_numerator, min_exp_denominator))
+                        else:
+                            alone = Term("{}*x**{}/{}".format(min_coe_numerator, min_exp_numerator, min_exp_denominator))
+                    else:
+                        alone = Term("{}/{}*x**{}/{}".format(min_coe_numerator, min_coe_denominator, min_exp_numerator, min_exp_denominator))
             for term in new_arr:
                 term = term/Term("x**{}/{}".format(min_exp_numerator, min_exp_denominator))
                 final.append(term)
-            if repr(alone)=='1':
-                alone = ""
         else:
             alone = ""
         if alone=="":
@@ -444,7 +478,11 @@ class Polynomial(object):
                         break
             except AttributeError:
                 break
-        return ans
+
+        if repr(copy_self)=="1":
+            return ans
+        else:
+            return "{}*({})".format(ans, repr(copy_self))
 
     def arrange(self):
         self.terms = sorted(self.terms, key=lambda i:i.exp_numerator/i.exp_denominator)[::-1]
@@ -474,12 +512,84 @@ class Rational(object):
         else:
             self.denominator = Function(denominator)
 
-b = Function("x**2+9*x-10")
-e = Function("x**3+11*x**2+8*x-20")
-d = Function("x**2+2*x")
-c = Function("x+2")
-print e.factor()
-print b.factor()
-print d.factor()
-print d.factor()
-print d/c
+    def __repr__(self):
+        return "({})/({})".format(repr(self.numerator), repr(self.denominator))
+
+    def __add__(self, other):
+        if isinstance(other, Rational):
+            copy_self = Rational(self.numerator, self.denominator)
+            copy_self.numerator = copy_self.numerator * other.denominator
+            copy_self.denominator = copy_self.denominator * other.denominator
+            other.numerator = other.numerator * self.denominator
+            other.denominator = other.denominator * self.denominator
+            ans = Rational(other.numerator+copy_self.numerator, copy_self.denominator)
+            ans.numerator.combine()
+            ans.numerator.combine() #Just to make sure
+            ans.numerator.combine() #No really, for sure now
+        return ans
+
+    def __sub__(self, other):
+        if isinstance(other, Rational):
+            other.numerator = other.numerator*-1
+        elif isinstance(other, (Polynomial, Term, int)):
+            other = other*-1
+        else:
+            raise ValueError("Can only subtract rational by rational, polynomial, term, or int")
+        return self+other
+
+    def __mul__(self, other):
+        if isinstance(other, Rational):
+            return Rational(self.numerator*other.numerator, self.denominator*other.denominator)
+        elif isinstance(other, (Polynomial, Term, int)):
+            return Rational(self.numerator*other, self.denominator)
+        else:
+            raise ValueError("Can only multiply rational by rational, polynomial, term or int")
+
+    def __truediv__(self, other):
+        if isinstance(other, Rational):
+            other = Rational(other.denominator, other.numerator)
+            return self*other
+        elif isinstance(other, (Polynomial, Term, int)):
+            other = 1/other
+            return self*other
+        else:
+            raise ValueError("can only divide rational by rational, polynomial, term, or int")
+
+    def derivative(self):
+        top = (self.denominator*self.numerator.derivative()-self.numerator*self.denominator.derivative())
+        top.combine()
+        top.arrange()
+        bottom = self.denominator*self.denominator
+        bottom.combine()
+        bottom.arrange()
+        return Rational(top, bottom)
+
+    def limit(self, point):
+        top = self.numerator.evaluate(point)
+        bottom = self.denominator.evaluate(point)
+        if bottom == 0:
+            if top == 0:
+                return Rational(self.numerator.derivative(), self.denominator.derivative()).limit(point)
+            else:
+                bottom1 = self.denominator.evaluate(point-0.001)
+                bottom2 = self.denominator.evaluate(point+0.001)
+                top1 = self.numerator.evaluate(point-0.001)
+                top2 = self.numerator.evaluate(point+0.001)
+                if (top1/bottom1<0 and top2/bottom2<0) or (top1/bottom1>0 and top2/bottom2>0):
+                    if top1/bottom1<0:
+                        return -float("inf")
+                    return float("inf")
+                raise ZeroDivisionError
+        else:
+            return top/bottom
+
+
+a = Rational(Function("x-2"), Function("x+3"))
+b = Rational(Function("x+4"), Function("x-1"))
+c = a-b
+print c
+e= c.derivative()
+print e
+print e.numerator.factor()
+print e.denominator.factor()
+print a.limit(-3)
