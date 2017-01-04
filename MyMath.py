@@ -17,7 +17,7 @@ def Function(func): #This is sort of a pseudo class, in that it returns a new ob
 
 def simplify(num, denom):
     curr_max = 0
-    for i in range(2, int(min(abs(num), abs(denom)))):
+    for i in range(2, int(min(abs(num), abs(denom)))+1):
         if num%i==0 and denom%i==0:
             curr_max = i
     try:
@@ -452,37 +452,58 @@ class Polynomial(object):
                             alone = Term("{}*x**{}/{}".format(min_coe_numerator, min_exp_numerator, min_exp_denominator))
                     else:
                         alone = Term("{}/{}*x**{}/{}".format(min_coe_numerator, min_coe_denominator, min_exp_numerator, min_exp_denominator))
+
             for term in new_arr:
-                term = term/Term("x**{}/{}".format(min_exp_numerator, min_exp_denominator))
+                if isinstance(alone, str):alone = Term(alone)
+                broken = False
+                if repr(alone)=='0':
+                    broken = True
+                    break
+                term = term/alone
                 final.append(term)
+            if broken:
+                final = list(new_arr)
+
         else:
             alone = ""
-        if alone=="":
+        if alone=="" or repr(alone)=='0':
             pass
         else:
             ans += repr(alone)
         copy_self = Polynomial(final)
+        copy_self.simplify()
+        if alone:
+            copy_self = copy_self/alone
+        all_factors = []
         for i in range(-100, 101): #Reasonable range for factors
             try:
-                if copy_self.evaluate(i) == 0:
+                while copy_self.evaluate(i) == 0:
+                    if copy_self.evaluate(i) != 0:
+                        break
                     if i<0:
                         temp = Function("x+"+str(abs(i)))
                     else:
                         temp = Function("x-"+str(i))
                     copy_self = copy_self/temp
-                    if len(ans):
-                        ans += "*({})".format(repr(temp))
+                    if len(all_factors) and repr(temp)==all_factors[len(all_factors)-1][0]:
+                        all_factors[len(all_factors)-1][1] += 1
                     else:
-                        ans += "({})".format(repr(temp))
+                        all_factors.append([repr(temp), 1])
                     if repr(copy_self)=='1' or len(copy_self.terms) < 1:
                         break
-            except AttributeError:
+            except AttributeError: #It means that all the terms have been found
                 break
 
-        if repr(copy_self)=="1":
-            return ans
-        else:
-            return "{}*({})".format(ans, repr(copy_self))
+        for factor in all_factors:
+            if factor[1]==1 and len(ans):
+                ans += "*({})".format(factor[0])
+            elif factor[1]==1:
+                ans += "({})".format(factor[0])
+            elif factor[1] > 1 and len(ans):
+                ans += "*({})**{}".format(factor[0], factor[1])
+            elif factor[1] > 1:
+                ans += "({})**{}".format(factor[0], factor[1])
+        return ans
 
     def arrange(self):
         self.terms = sorted(self.terms, key=lambda i:i.exp_numerator/i.exp_denominator)[::-1]
@@ -490,6 +511,14 @@ class Polynomial(object):
 
     def check_sign(self):
         self.terms = [term.check_sign() for term in self.terms]
+        return self
+
+    def simplify(self):
+        new_terms = []
+        for term in self.terms:
+            term.coe_numerator, term.coe_denominator = simplify(term.coe_numerator, term.coe_denominator)
+            new_terms.append(term)
+        self.terms = new_terms
         return self
 
     def __eq__(self, other):
@@ -589,7 +618,5 @@ b = Rational(Function("x+4"), Function("x-1"))
 c = a-b
 print c
 e= c.derivative()
-print e
-print e.numerator.factor()
 print e.denominator.factor()
-print a.limit(-3)
+#print a.limit(-3)
