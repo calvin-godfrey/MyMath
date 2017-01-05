@@ -10,10 +10,19 @@ def Function(func): #This is sort of a pseudo class, in that it returns a new ob
     """
     terms = re.compile("-?(?:(?:(?:\\d+/\\d+|\\d+)\\*)?x(?:\\*\\*-?(?:\\d+/\\d+|\\d+))?|\\d+)")#n*x**m
     terms = terms.findall(func)
-    if len(terms) > 1:
-        return Polynomial(terms)
-    if len(terms) == 1:
-        return Term(terms[0])
+    if "(" not in func and ")" not in func:
+        if len(terms) > 1:
+            return Polynomial(terms)
+        if len(terms) == 1:
+            return Term(terms[0])
+    else:
+        rational = re.compile("\\((?:(?:-|\\+)?(?:(?:(?:\\d+/\\d+|\\d+)\\*)?x(?:\\*\\*-?(?:\\d+/\\d+|\\d+))?|\\d+))+\\)/\\((?:(?:-|\\+)?(?:(?:(?:\\d+/\\d+|\\d+)\\*)?x(?:\\*\\*-?(?:\\d+/\\d+|\\d+))?|\\d+))+\\)")
+        rational = rational.findall(func)
+        if len(rational):
+            num, denom = func.split(")/(")
+            num = num[1:]
+            denom = denom[:-1]
+            return Rational(num, denom)
 
 def simplify(num, denom):
     curr_max = 0
@@ -138,8 +147,8 @@ class Term(object):
                 return "-{}*{}**{}".format(self.coe_numerator, self.variable, self.exp_numerator)
             return "{}/{}*{}**{}".format(self.coe_numerator, self.coe_denominator, self.variable, self.exp_numerator)
         else:
-            if self.coe_numerator == 1:
-                return "{}**{}/{}".format(self.variable, self.exp_numerator, self.exp_denominator)
+            if self.coe_denominator == 1:
+                return "{}*{}**{}/{}".format(self.coe_numerator, self.variable, self.exp_numerator, self.exp_denominator)
             if self.coe_numerator == -1:
                 return "-{}**{}/{}".format(self.variable, self.exp_numerator, self.exp_denominator)
             return "{}/{}*{}**{}/{}".format(self.coe_numerator, self.coe_denominator, self.variable, self.exp_numerator, self.exp_denominator)
@@ -600,6 +609,23 @@ class Rational(object):
         return Rational(top, bottom)
 
     def limit(self, point):
+        if point == float('inf') or point == -float('inf'):
+            self.numerator = self.numerator.arrange()
+            self.denominator = self.denominator.arrange()
+            if self.numerator.terms[0].exp_numerator/self.numerator.terms[0].exp_denominator==self.denominator.terms[0].exp_numerator/self.denominator.terms[0].exp_denominator:
+                return (self.numerator.terms[0].coe_numerator/self.numerator.terms[0].coe_denominator)/(self.denominator.terms[0].coe_numerator/self.denominator.terms[0].coe_denominator)
+            else:
+                if self.numerator.terms[0].exp_numerator/self.numerator.terms[0].exp_denominator>self.denominator.terms[0].exp_numerator/self.denominator.terms[0].exp_denominator:
+                    if point == -float('inf'):
+                        if self.numerator.terms[0].exp_numerator > 0:
+                            return float('inf')
+                        return -float('inf')
+                    else:
+                        if self.numerator.terms[0].coe_numerator/self.numerator.terms[0].coe_denominator < 0:
+                            return -float('inf')
+                        return float('inf')
+
+
         top = self.numerator.evaluate(point)
         bottom = self.denominator.evaluate(point)
         if bottom == 0:
@@ -619,12 +645,10 @@ class Rational(object):
             return top/bottom
 
 
-a = Rational(Function("x-2"), Function("x+3"))
-b = Rational(Function("x+4"), Function("x-1"))
-c = a-b
-print c
-e= c.derivative()
-print e
-print e.numerator.factor()
-print e.denominator.factor()
-#print a.limit(-3)
+a = Function("x-3")
+print a
+a = a ** 4
+print a
+a = a.derivative()
+print a
+print a.factor()
