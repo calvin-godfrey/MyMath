@@ -207,7 +207,7 @@ class Term(object):
         new_exp_numerator, new_exp_denominator, new_coe_numerator, new_coe_denominator = self.exp_numerator, self.exp_denominator, self.coe_numerator, self.coe_denominator
         if isinstance(other, Term):
             other.check_sign()
-            if self.exp_numerator==other.exp_numerator and self.exp_denominator==other.exp_denominator and self.coe_denominator == other.coe_denominator and self.coe_numerator == other.coe_numerator:
+            if self==other:
                 return Term("1")
             new_coe_numerator *= other.coe_denominator
             new_coe_denominator *= other.coe_numerator
@@ -258,6 +258,10 @@ class Term(object):
         if self.exp_denominator < 0:
             self.exp_denominator *= -1
             self.exp_numerator *= -1
+
+    def __eq__(self, other):
+        if not isinstance(other, Term):return False
+        return self.coe_numerator==other.coe_numerator and self.coe_denominator==other.coe_denominator and self.exp_numerator==other.exp_numerator and self.exp_denominator==other.exp_denominator
 
 class Polynomial(object):
     """This is the class for a series of terms added together"""
@@ -503,6 +507,8 @@ class Polynomial(object):
                 ans += "*({})**{}".format(factor[0], factor[1])
             elif factor[1] > 1:
                 ans += "({})**{}".format(factor[0], factor[1])
+        if repr(copy_self)!= '1':
+            ans += "*({})".format(repr(copy_self))
         return ans
 
     def arrange(self):
@@ -618,5 +624,7 @@ b = Rational(Function("x+4"), Function("x-1"))
 c = a-b
 print c
 e= c.derivative()
+print e
+print e.numerator.factor()
 print e.denominator.factor()
 #print a.limit(-3)
